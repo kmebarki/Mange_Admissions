@@ -1,0 +1,13 @@
+node_modules
+.env
+.env.local
+*.sqlite
+.next
+dist
+coverage
+.DS_Store
+tmp
+.idea
+.vscode
+generated
+packages/sdk/generated

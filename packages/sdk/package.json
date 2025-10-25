@@ -1,0 +1,16 @@
+{
+  "name": "@adms/sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "generate": "hey-api openapi --input ../../openapi/openapi.yaml --output ./generated --client fetch --useOptions --exportCore false && node ./post-generate.cjs",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@hey-api/openapi-ts": "^0.47.4",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,592 @@
+openapi: 3.1.0
+info:
+  title: Admissions Suite API
+  version: 0.1.0
+  description: >
+    OpenAPI for the Admissions → Inscription → Facturation platform.
+    Front-end must use the generated SDK; direct HTTP calls are forbidden by project rules.
+servers:
+  - url: http://localhost:4000/api
+paths:
+  /auth/otp/request:
+    post:
+      summary: Request email OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+                orgSlug: { type: string }
+              required: [email]
+      responses:
+        "200":
+          description: OTP sent
+  /auth/otp/verify:
+    post:
+      summary: Verify email OTP and obtain tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+                code: { type: string }
+              required: [email, code]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokens"
+  /tenants:
+    get:
+      summary: List tenants (admin only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tenant"
+    post:
+      summary: Create tenant (super admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantCreate"
+      responses:
+        "201":
+          description: Created
+  /catalog/programs:
+    get:
+      summary: List programs
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Program" }
+    post:
+      summary: Create program (staff)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProgramCreate" }
+      responses:
+        "201":
+          description: Created
+  /catalog/sessions:
+    get:
+      summary: List sessions
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Session" }
+    post:
+      summary: Create session (staff)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SessionCreate" }
+      responses:
+        "201":
+          description: Created
+  /applications:
+    get:
+      summary: List applications for the authenticated user or by filters (staff)
+      responses:
+        "200":
+          description: OK
+    post:
+      summary: Start an application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApplicationStart" }
+      responses:
+        "201":
+          description: Created
+  /applications/{id}/submit:
+    post:
+      summary: Submit an application
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Submitted
+  /applications/{id}/documents:
+    post:
+      summary: Upload a document (pre-signed URL flow suggested)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type: { type: string }
+                fileName: { type: string }
+                size: { type: number }
+                mimeType: { type: string }
+              required: [type, fileName]
+      responses:
+        "201":
+          description: Created
+  /workflows/{id}/transition:
+    post:
+      summary: Transition an application to next state
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action: { type: string }
+                note: { type: string }
+      responses:
+        "200":
+          description: OK
+  /billing/invoices:
+    get:
+      summary: List invoices (self or staff filtered)
+      responses:
+        "200":
+          description: OK
+    post:
+      summary: Create invoice (staff) 
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InvoiceCreate" }
+      responses:
+        "201":
+          description: Created
+components:
+  schemas:
+    AuthTokens:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+    Tenant:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        languages: { type: array, items: { type: string } }
+        timezone: { type: string }
+    TenantCreate:
+      type: object
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        languages: { type: array, items: { type: string } }
+        timezone: { type: string }
+      required: [slug, name]
+    Program:
+      type: object
+      properties:
+        id: { type: string }
+        code: { type: string }
+        title: { type: string }
+        level: { type: string }
+        mode: { type: string }
+        campus: { type: string }
+        capacity: { type: integer }
+        language: { type: string }
+    ProgramCreate:
+      type: object
+      properties:
+        code: { type: string }
+        title: { type: string }
+        level: { type: string }
+        mode: { type: string }
+        campus: { type: string }
+        capacity: { type: integer }
+        language: { type: string }
+      required: [code, title]
+    Session:
+      type: object
+      properties:
+        id: { type: string }
+        programId: { type: string }
+        applyOpenAt: { type: string, format: date-time }
+        applyCloseAt: { type: string, format: date-time }
+        startDate: { type: string, format: date }
+        capacity: { type: integer }
+        waitlistPolicy: { type: string }
+    SessionCreate:
+      type: object
+      properties:
+        programId: { type: string }
+        applyOpenAt: { type: string, format: date-time }
+        applyCloseAt: { type: string, format: date-time }
+        startDate: { type: string, format: date }
+        capacity: { type: integer }
+        waitlistPolicy: { type: string }
+      required: [programId, startDate]
+    ApplicationStart:
+      type: object
+      properties:
+        programId: { type: string }
+        sessionId: { type: string }
+        locale: { type: string, enum: ["fr","en"] }
+      required: [programId]
+    InvoiceCreate:
+      type: object
+      properties:
+        applicationId: { type: string }
+        currency: { type: string }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              label: { type: string }
+              amount: { type: number }
+              account: { type: string }
+            required: [label, amount]
+      required: [applicationId, currency, lines]
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+
+/forms/templates:
+  post:
+    summary: Create a form template (staff)
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code: { type: string }
+              title: { type: string }
+              locale: { type: string }
+            required: [code, title]
+    responses:
+      "201": { description: Created }
+
+/forms/templates/{templateId}/versions:
+  post:
+    summary: Create a template version with sections & fields
+    parameters:
+      - in: path
+        name: templateId
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              version: { type: integer }
+              isPublished: { type: boolean }
+              sections:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    title: { type: string }
+                    fields:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key: { type: string }
+                          label: { type: string }
+                          type: { type: string }
+                          required: { type: boolean }
+                          options: { type: object }
+                          visibleIf: { type: object }
+    responses:
+      "201": { description: Created }
+
+/forms/templates/{code}/published:
+  get:
+    summary: Get published version by template code
+    parameters:
+      - in: path
+        name: code
+        required: true
+        schema: { type: string }
+    responses:
+      "200": { description: OK }
+
+/applications/{id}/form-responses:
+  post:
+    summary: Upsert a form response for an application
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { type: object }
+            required: [data]
+    responses:
+      "201": { description: Created }
+
+/integrations/ypareo/apprenants:
+  post:
+    summary: Create apprenant in YPAREO (proxy/stub)
+    responses:
+      "201": { description: Created }
+
+/integrations/ypareo/apprenants/{code}/external-id:
+  put:
+    summary: Set an external id (e.g., HubSpot) for an apprenant
+    parameters:
+      - in: path
+        name: code
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              system: { type: string, example: "hubspot" }
+              value: { type: string }
+            required: [value]
+    responses:
+      "200": { description: OK }
+
+
+/storage/presign:
+  post:
+    summary: Get a pre-signed upload URL (mock)
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              fileName: { type: string }
+              mimeType: { type: string }
+            required: [fileName]
+    responses:
+      "200": { description: OK }
+
+
+
+/workflows:
+  post:
+    summary: Create workflow
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code: { type: string }
+              name: { type: string }
+            required: [code, name]
+    responses:
+      "201": { description: Created }
+
+/workflows/{workflowId}/states:
+  post:
+    summary: Create state
+    parameters:
+      - in: path
+        name: workflowId
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              key: { type: string }
+              label: { type: string }
+              isInitial: { type: boolean }
+              isTerminal: { type: boolean }
+              order: { type: integer }
+            required: [key, label]
+    responses:
+      "201": { description: Created }
+
+/workflows/{workflowId}/transitions:
+  post:
+    summary: Create transition
+    parameters:
+      - in: path
+        name: workflowId
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              fromStateId: { type: string }
+              toStateId: { type: string }
+              name: { type: string }
+              guards:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type: { type: string }
+                    params: { type: object }
+            required: [fromStateId, toStateId, name]
+    responses:
+      "201": { description: Created }
+
+/workflows/applications/{applicationId}/transition:
+  post:
+    summary: Apply a transition to an application
+    parameters:
+      - in: path
+        name: applicationId
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              transitionId: { type: string }
+            required: [transitionId]
+    responses:
+      "200": { description: OK }
+
+
+
+/interviews/slots:
+  get:
+    summary: List slots
+    responses: { "200": { description: OK } }
+  post:
+    summary: Create slot
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              juryId: { type: string }
+              mode: { type: string }
+              location: { type: string }
+              startsAt: { type: string, format: date-time }
+              endsAt: { type: string, format: date-time }
+              capacity: { type: integer }
+            required: [mode, startsAt, endsAt]
+    responses:
+      "201": { description: Created }
+
+/interviews/slots/{slotId}/book:
+  post:
+    summary: Book a slot for an application
+    parameters:
+      - in: path
+        name: slotId
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              applicationId: { type: string }
+            required: [applicationId]
+    responses:
+      "201": { description: Created }
+
+
+
+/billing/payment-plans:
+  post:
+    summary: Create a payment plan for an invoice
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              invoiceId: { type: string }
+              name: { type: string }
+              schedule:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    dueAt: { type: string, format: date-time }
+                    amount: { type: number }
+            required: [invoiceId, schedule]
+    responses:
+      "201": { description: Created }
+
+/psp/stripe/webhook:
+  post:
+    summary: Stripe webhook (stub)
+    responses: { "200": { description: OK } }

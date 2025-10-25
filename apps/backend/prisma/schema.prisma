@@ -1,0 +1,347 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  languages String[] @default(["fr","en"])
+  timezone  String   @default("Europe/Paris")
+  users     User[]
+  programs  Program[]
+  sessions  Session[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  hash      String?
+  orgId     String
+  tenant    Tenant   @relation(fields: [orgId], references: [id])
+  role      Role     @default(CANDIDATE)
+  mfaEnabled Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applications Application[]
+  auditLogs    AuditLog[]
+}
+
+enum Role {
+  SYS_ADMIN
+  TENANT_ADMIN
+  ADMISSIONS
+  PEDAGOGY
+  CFA_MANAGER
+  FINANCE
+  CANDIDATE
+}
+
+model Program {
+  id        String   @id @default(cuid())
+  orgId     String
+  tenant    Tenant   @relation(fields: [orgId], references: [id])
+  code      String
+  title     String
+  level     String?
+  mode      String?  // initial/apprentissage/FC
+  campus    String?
+  capacity  Int?
+  language  String?
+
+  sessions  Session[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  orgId       String
+  tenant      Tenant   @relation(fields: [orgId], references: [id])
+  programId   String
+  program     Program  @relation(fields: [programId], references: [id])
+  applyOpenAt DateTime?
+  applyCloseAt DateTime?
+  startDate   DateTime?
+  capacity    Int?
+  waitlistPolicy String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  applications Application[]
+}
+
+model Application {
+  id          String   @id @default(cuid())
+  orgId       String
+  tenant      Tenant   @relation(fields: [orgId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  programId   String
+  sessionId   String?
+  state       AppState @default(DRAFT)
+  locale      String   @default("fr")
+  score       Float    @default(0)
+
+  documents   Document[]
+  invoices    Invoice[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum AppState {
+  DRAFT
+  SUBMITTED
+  COMPLETE
+  ELIGIBLE
+  INTERVIEW
+  DECISION
+  OFFER
+  ENROLLING
+  PAID
+  ENROLLED
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  orgId       String
+  tenant      Tenant   @relation(fields: [orgId], references: [id])
+  applicationId String
+  type        String
+  fileName    String
+  status      DocStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id])
+}
+
+enum DocStatus {
+  REQUIRED
+  PENDING
+  RECEIVED
+  APPROVED
+  REJECTED
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  orgId       String
+  tenant      Tenant   @relation(fields: [orgId], references: [id])
+  applicationId String
+  currency    String   @default("EUR")
+  total       Decimal  @db.Decimal(12,2) @default(0)
+  status      InvoiceStatus @default(DRAFT)
+  issuedAt    DateTime @default(now())
+  dueAt       DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id])
+  lines       InvoiceLine[]
+  payments    Payment[]
+}
+
+model InvoiceLine {
+  id        String   @id @default(cuid())
+  invoiceId String
+  label     String
+  amount    Decimal  @db.Decimal(12,2)
+  account   String?
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  amount    Decimal  @db.Decimal(12,2)
+  method    String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  tenant    Tenant   @relation(fields: [orgId], references: [id])
+  userId    String?
+  actor     String?
+  action    String
+  target    String?
+  meta      Json?
+  createdAt DateTime @default(now())
+}
+
+
+// ===== Form Builder =====
+model FormTemplate {
+  id        String   @id @default(cuid())
+  orgId     String
+  tenant    Tenant   @relation(fields: [orgId], references: [id])
+  code      String   @unique
+  title     String
+  locale    String   @default("fr")
+  versions  FormVersion[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FormVersion {
+  id            String   @id @default(cuid())
+  templateId    String
+  template      FormTemplate @relation(fields: [templateId], references: [id])
+  version       Int
+  sections      FormSection[]
+  isPublished   Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([templateId, version])
+}
+
+model FormSection {
+  id        String   @id @default(cuid())
+  versionId String
+  version   FormVersion @relation(fields: [versionId], references: [id])
+  title     String
+  order     Int       @default(0)
+  fields    FormField[]
+}
+
+model FormField {
+  id        String   @id @default(cuid())
+  sectionId String
+  section   FormSection @relation(fields: [sectionId], references: [id])
+  key       String
+  label     String
+  type      String   // text, textarea, date, select, file, multi-file, tel, email, number, checkbox, radio
+  required  Boolean  @default(false)
+  options   Json?
+  visibleIf Json?
+  order     Int      @default(0)
+}
+
+model FormResponse {
+  id            String   @id @default(cuid())
+  orgId         String
+  tenant        Tenant   @relation(fields: [orgId], references: [id])
+  applicationId String
+  data          Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id])
+}
+
+
+// ===== Workflows paramétrables =====
+model Workflow {
+  id        String   @id @default(cuid())
+  orgId     String
+  tenant    Tenant   @relation(fields: [orgId], references: [id])
+  code      String   @unique
+  name      String
+  states    WfState[]
+  transitions WfTransition[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WfState {
+  id          String   @id @default(cuid())
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id])
+  key         String
+  label       String
+  isInitial   Boolean @default(false)
+  isTerminal  Boolean @default(false)
+  order       Int @default(0)
+
+  @@unique([workflowId, key])
+}
+
+model WfTransition {
+  id          String   @id @default(cuid())
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id])
+  fromStateId String
+  toStateId   String
+  name        String
+  guards      WfGuard[]
+}
+
+model WfGuard {
+  id           String   @id @default(cuid())
+  transitionId String
+  transition   WfTransition @relation(fields: [transitionId], references: [id])
+  type         String   // 'scoreGTE', 'docsComplete', 'roleIn', etc.
+  params       Json?
+}
+
+
+// ===== Entretiens (planification) =====
+model InterviewSlot {
+  id        String   @id @default(cuid())
+  orgId     String
+  tenant    Tenant   @relation(fields: [orgId], references: [id])
+  juryId    String?
+  mode      String   // 'onsite' | 'video'
+  location  String?
+  startsAt  DateTime
+  endsAt    DateTime
+  capacity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings  InterviewBooking[]
+}
+
+model InterviewBooking {
+  id          String   @id @default(cuid())
+  slotId      String
+  slot        InterviewSlot @relation(fields: [slotId], references: [id])
+  applicationId String
+  status      String   @default("booked") // booked, attended, no-show, canceled
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+
+// ===== Paiements & Echéanciers =====
+model PaymentPlan {
+  id          String   @id @default(cuid())
+  orgId       String
+  tenant      Tenant   @relation(fields: [orgId], references: [id])
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  schedules   PaymentSchedule[]
+}
+
+model PaymentSchedule {
+  id          String   @id @default(cuid())
+  planId      String
+  plan        PaymentPlan @relation(fields: [planId], references: [id])
+  dueAt       DateTime
+  amount      Decimal @db.Decimal(12,2)
+  status      String @default("pending") // pending, paid, overdue, canceled
+}
+
+model PspWebhook {
+  id        String   @id @default(cuid())
+  provider  String
+  payload   Json
+  createdAt DateTime @default(now())
+}
